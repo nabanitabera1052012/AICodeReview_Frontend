@@ -8,6 +8,13 @@ import "highlight.js/styles/github-dark.css"
 import axios from 'axios'
 import './App.css'
 
+const API_BASE_URL = (
+  import.meta.env.VITE_BACKEND_URL || 
+  (import.meta.env.PROD 
+    ? 'https://aicodereview-backend-furu.onrender.com' 
+    : 'http://localhost:3000')
+).replace(/\/+$/, '');
+
 const CodeEditor = (typeof Editor === 'function' || Editor?.$$typeof) ? Editor : (Editor?.default || Editor);
 
 const CODE_PRESETS = {
@@ -142,7 +149,7 @@ export default function App() {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:3000/ai/get-review", {
+      const response = await axios.post(`${API_BASE_URL}/ai/get-review`, {
         code,
         message: "Perform a comprehensive Senior Code Review evaluating code quality, bugs, performance, security, and clean architecture."
       });
@@ -158,12 +165,12 @@ export default function App() {
       console.error(error);
       const errDetails = error.response?.data
         ? `\n\n> **API Error:** ${typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data)}`
-        : "\n\nPlease ensure your backend server is running on `http://localhost:3000` and your `GOOGLE_GEMINI_KEY` is configured.";
+        : `\n\nUnable to reach backend at \`${API_BASE_URL}\`. If the server was idle (Render free tier), please allow 30–50s for it to wake up and try again.`;
 
       const errorMsg = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `### ⚠️ Code Review Failed${errDetails}\n\n*Check your API key in \`backend/.env\`.*`,
+        content: `### ⚠️ Code Review Failed${errDetails}\n\n*Verify backend status or check \`GOOGLE_GEMINI_KEY\`.*`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isError: true
       };
@@ -191,7 +198,7 @@ export default function App() {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:3000/ai/get-review", {
+      const response = await axios.post(`${API_BASE_URL}/ai/get-review`, {
         code,
         message: promptToSend
       });
@@ -207,7 +214,7 @@ export default function App() {
       console.error(error);
       const errDetails = error.response?.data
         ? `\n\n> **API Error:** ${typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data)}`
-        : "\n\nPlease check your backend server on `http://localhost:3000`.";
+        : `\n\nUnable to reach backend at \`${API_BASE_URL}\`.`;
 
       const errorMsg = {
         id: (Date.now() + 1).toString(),
