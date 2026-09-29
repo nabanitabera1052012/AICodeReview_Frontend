@@ -2,6 +2,21 @@ import { useState, useEffect, useRef } from 'react'
 import "prismjs/themes/prism-tomorrow.css"
 import Editor from "react-simple-code-editor"
 import prism from "prismjs"
+import "prismjs/components/prism-clike"
+import "prismjs/components/prism-javascript"
+import "prismjs/components/prism-typescript"
+import "prismjs/components/prism-python"
+import "prismjs/components/prism-c"
+import "prismjs/components/prism-cpp"
+import "prismjs/components/prism-csharp"
+import "prismjs/components/prism-java"
+import "prismjs/components/prism-go"
+import "prismjs/components/prism-rust"
+import "prismjs/components/prism-sql"
+import "prismjs/components/prism-markup-templating"
+import "prismjs/components/prism-php"
+import "prismjs/components/prism-json"
+import "prismjs/components/prism-bash"
 import Markdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 import "highlight.js/styles/github-dark.css"
@@ -17,9 +32,27 @@ const API_BASE_URL = (
 
 const CodeEditor = (typeof Editor === 'function' || Editor?.$$typeof) ? Editor : (Editor?.default || Editor);
 
-const CODE_PRESETS = {
-  asyncBug: `// Scenario: Fetching and parsing user data with async bugs
-function getUserData(userId) {
+// Supported languages with associated extensions, file badges, and Prism grammar modes
+const SUPPORTED_LANGUAGES = [
+  { id: 'javascript', label: 'JavaScript', ext: 'js', file: 'solution.js', prismLang: 'javascript' },
+  { id: 'typescript', label: 'TypeScript', ext: 'ts', file: 'solution.ts', prismLang: 'typescript' },
+  { id: 'python', label: 'Python', ext: 'py', file: 'main.py', prismLang: 'python' },
+  { id: 'java', label: 'Java', ext: 'java', file: 'Main.java', prismLang: 'java' },
+  { id: 'cpp', label: 'C++', ext: 'cpp', file: 'main.cpp', prismLang: 'cpp' },
+  { id: 'csharp', label: 'C#', ext: 'cs', file: 'Program.cs', prismLang: 'csharp' },
+  { id: 'go', label: 'Go', ext: 'go', file: 'main.go', prismLang: 'go' },
+  { id: 'rust', label: 'Rust', ext: 'rs', file: 'main.rs', prismLang: 'rust' },
+  { id: 'php', label: 'PHP', ext: 'php', file: 'index.php', prismLang: 'php' },
+  { id: 'sql', label: 'SQL', ext: 'sql', file: 'query.sql', prismLang: 'sql' },
+  { id: 'bash', label: 'Bash / Shell', ext: 'sh', file: 'script.sh', prismLang: 'bash' },
+  { id: 'json', label: 'JSON', ext: 'json', file: 'config.json', prismLang: 'json' },
+  { id: 'markup', label: 'HTML', ext: 'html', file: 'index.html', prismLang: 'markup' }
+];
+
+// Curated language bug presets
+const LANGUAGE_PRESETS = {
+  javascript: `// JavaScript: Asynchronous fetch race condition and unhandled promise
+async function fetchUserProfile(userId) {
   let profile = fetch('/api/user/' + userId).then(res => res.json());
   
   if (!profile) {
@@ -32,57 +65,129 @@ function getUserData(userId) {
     email: profile.email
   };
 }`,
-  memoryLeak: `// Scenario: Event listener closure leak in a component
-class DashboardWidget {
-  constructor(element) {
-    this.element = element;
-    this.hugePayload = new Array(1000000).fill("payload_data");
-    
-    window.addEventListener("resize", () => {
-      console.log("Resize event handled for:", this.element);
-      this.render();
-    });
-  }
+  typescript: `// TypeScript: Unsafe type cast and missing null check
+interface UserProfile {
+  id: string;
+  name: string;
+  roles?: string[];
+}
 
-  render() {
-    this.element.innerHTML = \`<div>Widget active</div>\`;
+function processAdminAccess(user: any): boolean {
+  // Unsafe assumption without runtime check
+  return user.roles.includes("admin");
+}`,
+  python: `# Python: Mutable default argument & unhandled file leak
+def append_to_cache(item, cache=[]):
+    cache.append(item)
+    return cache
+
+def read_config(path: str):
+    f = open(path, "r")  # Unclosed resource
+    return f.read()`,
+  java: `// Java: Null pointer risk & unclosed BufferedReader
+import java.io.*;
+
+public class DataReader {
+    public static String readFile(String path) throws Exception {
+        BufferedReader reader = new BufferedReader(new FileReader(path));
+        // Missing try-with-resources or close()
+        return reader.readLine();
+    }
+}`,
+  cpp: `// C++: Raw memory leak & buffer overflow vulnerability
+#include <iostream>
+#include <cstring>
+
+void processInput(const char* input) {
+    char buffer[16];
+    strcpy(buffer, input); // Dangerous buffer overflow risk
+    
+    int* data = new int[100]; // Memory leak: never freed
+    data[0] = 42;
+}`,
+  csharp: `// C#: Inefficient multiple LINQ enumerations
+using System;
+using System.Linq;
+using System.Collections.Generic;
+
+public class OrderService {
+    public void ProcessOrders(List<int> orders) {
+        var query = orders.Where(x => x > 100);
+        if (query.Count() > 0) {
+            var first = query.First();
+        }
+    }
+}`,
+  go: `// Go: Goroutine leak & unhandled HTTP error
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func fetchStatus(url string) {
+    ch := make(chan int)
+    go func() {
+        resp, err := http.Get(url)
+        // Missing error check & resp.Body.Close()
+        ch <- resp.StatusCode
+    }()
+}`,
+  rust: `// Rust: Unchecked unwrap and unneeded clone
+use std::fs::File;
+use std::io::Read;
+
+fn load_credentials() -> String {
+    let mut file = File::open("secret.key").unwrap(); // Can panic at runtime
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    contents.clone() // Redundant clone
+}`,
+  php: `<?php
+// PHP: SQL injection vulnerability
+function authenticate($conn, $username, $password) {
+    $sql = "SELECT * FROM users WHERE username = '$username' AND password = '$password'";
+    $result = mysqli_query($conn, $sql);
+    return mysqli_fetch_assoc($result);
+}`,
+  sql: `-- SQL: Missing join conditions causing slow table scans
+SELECT u.id, u.name, o.total
+FROM users u, orders o
+WHERE u.status = 'active'
+ORDER BY u.created_at DESC;`,
+  bash: `#!/bin/bash
+# Shell: Unquoted variables & command injection hazard
+echo "Processing file: $1"
+rm -rf /tmp/data/$1
+eval "cat $1 | grep 'error'"`,
+  json: `{
+  "service": "api-gateway",
+  "version": "1.0.0",
+  "auth": {
+    "tokenExpirySeconds": "never",
+    "allowAnonymous": true
   }
 }`,
-  sqlInjection: `// Scenario: Node/Express backend query with SQL vulnerability
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  
-  const query = "SELECT * FROM users WHERE user = '" + username + "' AND pass = '" + password + "'";
-  
-  db.query(query, (err, results) => {
-    if (results.length > 0) {
-      res.send({ status: "success", user: results[0] });
-    } else {
-      res.status(401).send("Invalid credentials");
-    }
-  });
-});`,
-  cleanFunction: `// Scenario: Clean functional utility
-function calculateCartTotal(items, discountRate = 0) {
-  if (!Array.isArray(items)) {
-    throw new TypeError("Items must be an array");
-  }
-
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const discount = subtotal * (discountRate / 100);
-  const tax = (subtotal - discount) * 0.08;
-
-  return {
-    subtotal: Number(subtotal.toFixed(2)),
-    discount: Number(discount.toFixed(2)),
-    tax: Number(tax.toFixed(2)),
-    total: Number((subtotal - discount + tax).toFixed(2))
-  };
-}`
+  markup: `<!-- HTML: Missing DOCTYPE, meta charset & vulnerable script injection -->
+<html>
+<head>
+  <title>User Portal</title>
+</head>
+<body>
+  <h1>Welcome</h1>
+  <div id="output"></div>
+  <script>
+    const name = location.search.split("=")[1];
+    document.getElementById("output").innerHTML = name; // XSS vulnerability
+  </script>
+</body>
+</html>`
 };
 
 export default function App() {
-  const [code, setCode] = useState(CODE_PRESETS.asyncBug);
+  const [selectedLang, setSelectedLang] = useState('javascript');
+  const [code, setCode] = useState(LANGUAGE_PRESETS.javascript);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -90,10 +195,13 @@ export default function App() {
 
   const chatEndRef = useRef(null);
 
+  const currentLang = SUPPORTED_LANGUAGES.find(l => l.id === selectedLang) || SUPPORTED_LANGUAGES[0];
+  const grammar = prism.languages[currentLang.prismLang] || prism.languages.javascript;
+
   // Re-highlight syntax whenever code changes or on mount
   useEffect(() => {
     prism.highlightAll();
-  }, [code]);
+  }, [code, selectedLang]);
 
   // Scroll to bottom of chat on new message
   useEffect(() => {
@@ -102,13 +210,17 @@ export default function App() {
 
   const showToast = (text) => {
     setToastMessage(text);
-    setTimeout(() => setToastMessage(""), 2500);
+    setTimeout(() => setToastMessage(""), 2600);
   };
 
-  const lineCount = code.split("\n").length;
+  const lineCount = code ? code.split("\n").length : 0;
   const charCount = code.length;
 
   const handleCopyCode = async () => {
+    if (!code) {
+      showToast("Editor is empty — nothing to copy");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(code);
       showToast("Code copied to clipboard!");
@@ -119,14 +231,43 @@ export default function App() {
 
   const handleClearCode = () => {
     setCode("");
-    showToast("Editor cleared");
+    showToast("✨ Editor cleared! Paste code or select a language.");
   };
 
-  const handlePresetChange = (e) => {
-    const key = e.target.value;
-    if (CODE_PRESETS[key]) {
-      setCode(CODE_PRESETS[key]);
-      showToast("Preset loaded");
+  const handlePasteCode = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        showToast("Clipboard is empty! Copy code from your terminal first.");
+        return;
+      }
+      setCode(text);
+      showToast(`📋 Code pasted (${text.split('\n').length} lines)`);
+    } catch {
+      showToast("Clipboard permission denied. Use Ctrl+V / ⌘V in the editor.");
+    }
+  };
+
+  const handleLanguageChange = (e) => {
+    const newLangId = e.target.value;
+    setSelectedLang(newLangId);
+    const langObj = SUPPORTED_LANGUAGES.find(l => l.id === newLangId) || SUPPORTED_LANGUAGES[0];
+
+    // If editor is empty or currently contains a standard snippet, load the snippet for the new language
+    const isStandardSnippet = Object.values(LANGUAGE_PRESETS).some(p => p.trim() === code.trim());
+    if (!code.trim() || isStandardSnippet) {
+      if (LANGUAGE_PRESETS[newLangId]) {
+        setCode(LANGUAGE_PRESETS[newLangId]);
+      }
+    }
+    showToast(`Switched language to ${langObj.label} (${langObj.file})`);
+  };
+
+  const handlePresetSelect = (presetKey) => {
+    if (LANGUAGE_PRESETS[presetKey]) {
+      setSelectedLang(presetKey);
+      setCode(LANGUAGE_PRESETS[presetKey]);
+      showToast(`Loaded ${presetKey} sample snippet`);
     }
   };
 
@@ -140,9 +281,10 @@ export default function App() {
     const userMsg = {
       id: Date.now().toString(),
       role: "user",
-      content: "🚀 Please perform a comprehensive Senior Code Review on this code snippet.",
+      content: `🚀 Please perform a comprehensive Senior Code Review on this ${currentLang.label} snippet.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      hasCode: true
+      hasCode: true,
+      file: currentLang.file
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -151,7 +293,8 @@ export default function App() {
     try {
       const response = await axios.post(`${API_BASE_URL}/ai/get-review`, {
         code,
-        message: "Perform a comprehensive Senior Code Review evaluating code quality, bugs, performance, security, and clean architecture."
+        language: currentLang.label,
+        message: `Perform a comprehensive Senior Code Review evaluating code quality, bugs, performance, security, and clean architecture.`
       });
 
       const aiMsg = {
@@ -200,6 +343,7 @@ export default function App() {
     try {
       const response = await axios.post(`${API_BASE_URL}/ai/get-review`, {
         code,
+        language: currentLang.label,
         message: promptToSend
       });
 
@@ -249,19 +393,80 @@ export default function App() {
               <polyline points="8 6 2 12 8 18"></polyline>
             </svg>
           </div>
-          <span className="brand-name">CodePulse AI</span>
-          <span className="brand-badge">Senior Reviewer</span>
+          <div className="brand-titles">
+            <span className="brand-name">CodePulse AI</span>
+            <span className="brand-badge">Senior Reviewer</span>
+          </div>
+
+          <div className="nav-divider"></div>
+
+          {/* Left-Side Navbar Action: Clear Button */}
+          <button 
+            id="nav-clear-btn"
+            className="nav-btn nav-btn-clear" 
+            onClick={handleClearCode} 
+            title="Automatically clear editor (Reset)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+            <span>Clear</span>
+          </button>
+
+          {/* Left-Side Navbar Action: Quick Paste Button */}
+          <button 
+            id="nav-paste-btn"
+            className="nav-btn nav-btn-paste" 
+            onClick={handlePasteCode} 
+            title="Paste code directly from terminal or clipboard"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+            <span>Paste</span>
+          </button>
+
+          {/* Left-Side Navbar Action: Language Selector */}
+          <div className="nav-language-wrapper">
+            <svg className="nav-lang-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+            <select 
+              id="nav-language-select"
+              className="nav-language-select" 
+              value={selectedLang} 
+              onChange={handleLanguageChange}
+              title="Select programming language for syntax highlighting & review"
+            >
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.label} ({lang.ext})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="header-actions">
-          <select className="preset-select" onChange={handlePresetChange} defaultValue="asyncBug" title="Load sample code snippets">
-            <option value="asyncBug">Snippet: Async Promise Bug</option>
-            <option value="memoryLeak">Snippet: Memory Leak Closure</option>
-            <option value="sqlInjection">Snippet: SQL Injection Risk</option>
-            <option value="cleanFunction">Snippet: Clean E-Commerce Utility</option>
+          <select 
+            className="preset-select" 
+            onChange={(e) => handlePresetSelect(e.target.value)} 
+            value={selectedLang}
+            title="Load sample snippets by language"
+          >
+            <option value="" disabled>Load Sample Scenario...</option>
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <option key={lang.id} value={lang.id}>
+                Sample: {lang.label} ({lang.file})
+              </option>
+            ))}
           </select>
 
-          <div className="status-indicator">
+          <div className="status-indicator" title={`Backend: ${API_BASE_URL}`}>
             <span className="pulse-dot"></span>
             <span>Gemini AI Ready</span>
           </div>
@@ -284,11 +489,18 @@ export default function App() {
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
-                <span>solution.js</span>
+                <span>{currentLang.file}</span>
+                <span className="tab-ext-pill">{currentLang.ext}</span>
               </div>
             </div>
 
             <div className="panel-actions">
+              <button className="icon-btn" onClick={handlePasteCode} title="Paste code from clipboard / terminal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+              </button>
               <button className="icon-btn" onClick={handleCopyCode} title="Copy code">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -305,10 +517,30 @@ export default function App() {
           </div>
 
           <div className="editor-wrapper">
+            {!code && (
+              <div className="editor-empty-state">
+                <div className="empty-state-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                  </svg>
+                </div>
+                <p className="empty-state-title">Editor is ready for your {currentLang.label} code</p>
+                <p className="empty-state-subtitle">Paste code from terminal (<kbd>Ctrl+V</kbd> / <kbd>⌘V</kbd>) or click the <strong>Paste</strong> button above</p>
+              </div>
+            )}
+
             <CodeEditor
               value={code}
               onValueChange={c => setCode(c)}
-              highlight={c => prism.highlight(c, prism.languages.javascript, "javascript")}
+              highlight={c => {
+                try {
+                  const activeGrammar = prism.languages[currentLang.prismLang] || prism.languages.javascript || {};
+                  return prism.highlight(c, activeGrammar, currentLang.prismLang || 'javascript');
+                } catch (e) {
+                  return c;
+                }
+              }}
               padding={16}
               className="code-editor-area"
               style={{
@@ -323,7 +555,7 @@ export default function App() {
             <div className="editor-stats">
               <span>Lines: {lineCount}</span>
               <span>Chars: {charCount}</span>
-              <span>JavaScript</span>
+              <span className="lang-stat-tag">{currentLang.label}</span>
             </div>
 
             <button 
@@ -441,7 +673,7 @@ export default function App() {
                         <span>{msg.timestamp}</span>
                         {msg.hasCode && (
                           <span style={{ color: '#818cf8', fontSize: '0.65rem', background: 'rgba(99,102,241,0.15)', padding: '1px 6px', borderRadius: 4 }}>
-                            solution.js attached
+                            {msg.file || currentLang.file} attached
                           </span>
                         )}
                       </div>
